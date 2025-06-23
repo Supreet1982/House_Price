@@ -77,10 +77,19 @@ df$stories <- NULL
 df$noise_traffic <- factor(df$noise_traffic)
 df$greenbelt <- factor(df$greenbelt)
 df$golf <- factor(df$golf)
+df$wfnt <- as.factor(df$wfnt)
 
 cols_to_factors <- grep('^view_', names(df), value = TRUE)
 
 df[cols_to_factors] <- lapply(df[cols_to_factors], factor)
+
+#Grade
+
+df$Grade_group <- cut(df$grade, breaks = c(0,5,7,10,13),
+                      labels = c('low', 'Average', 'Above Average', 'Luxury'),
+                      right = TRUE)
+df$grade <- NULL
+
 
 
 
