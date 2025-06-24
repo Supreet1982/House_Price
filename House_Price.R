@@ -6,7 +6,7 @@ str(df_full)
 
 ################################################################################
 
-#DATA CLEANING & EXPLORATION
+#DATA CLEANING
 
 #Remove columns
 
@@ -52,6 +52,7 @@ df$sqft <- NULL
 df$sqft_1 <- NULL
 df$sqft_lot <- NULL
 df$sqft_fbsmt <- NULL
+
 
 #Remove N/As
 
@@ -155,10 +156,16 @@ df$area = NULL
 
 attr(df, 'na.action') <- NULL
 
+#Remove variables
 
+df$city <- NULL
+df$zoning <- NULL
+df$subdivision <- NULL
+df$cluster <- NULL
 
+################################################################################
 
-
+#DATA EXPLORATION
 
 
 
