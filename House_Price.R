@@ -225,7 +225,10 @@ write.csv(skew_df, 'Skewness_values.csv', row.names = TRUE)
 
 num_df <- df[sapply(df, is.numeric)]
 
-ggpairs(sample_n(num_df, 1000))
+ggpairs_plot <- ggpairs(sample_n(num_df, 1000))
+
+ggsave('corr_plot.png', plot = ggpairs_plot, width = 10, height = 8, dpi = 300,
+       units = 'in')
 
 #Further Modifications
 
