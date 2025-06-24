@@ -2,6 +2,7 @@ library(tidyverse)
 library(MASS)
 library(fitdistrplus)
 library(e1071)
+library(GGally)
 
 df_full <- dataset
 
@@ -222,12 +223,17 @@ write.csv(skew_df, 'Skewness_values.csv', row.names = TRUE)
 
 #Numeric/Numeric
 
+num_df <- df[sapply(df, is.numeric)]
 
+ggpairs(sample_n(num_df, 1000))
 
+#Further Modifications
 
+df$log_Tot_val <- log1p(df$Tot_val)
+df$sqrt_Pro_Age <- sqrt(df$Pro_Age)
+df$log_lot_eff <- log1p(df$lot_eff)
 
-
-
+#Numeric/Categorical
 
 
 
