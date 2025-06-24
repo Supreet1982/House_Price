@@ -90,25 +90,70 @@ df$Grade_group <- cut(df$grade, breaks = c(0,5,7,10,13),
                       right = TRUE)
 df$grade <- NULL
 
+#Beds
 
+df$beds_grouped <- ifelse(df$beds >= 6, '6+', as.character(df$beds))
+df$beds_grouped <- as.factor(df$beds_grouped)
 
+df$beds <- NULL
 
+#Area (Use k-means)
 
+area_features <- df %>%
+  group_by(area) %>%
+  summarize(
+    bath_mean = mean(bath),
+    age_mean = mean(Pro_Age),
+    bmt_mean = mean(bmt_ratio),
+    lot_eff_mean = mean(lot_eff),
+    garage_mean = mean(log_garage),
+    has_garage_pct = mean(as.numeric(as.character(has_garage))),
+    traffic_mean = mean(as.numeric(as.character(noise_traffic))),
+    greenbelt_pct = mean(as.numeric(as.character(greenbelt))),
+    stories_mode = as.numeric(names(which.max(table(stories_capped))))
+  )
+  
+area_scaled <- scale(area_features[,-1])
 
+set.seed(1)
 
+km1 <- kmeans(area_scaled, centers = 1, nstart = 25)
+km2 <- kmeans(area_scaled, centers = 2, nstart = 25)
+km3 <- kmeans(area_scaled, centers = 3, nstart = 25)
+km4 <- kmeans(area_scaled, centers = 4, nstart = 25)
+km5 <- kmeans(area_scaled, centers = 5, nstart = 25)
+km6 <- kmeans(area_scaled, centers = 6, nstart = 25)
+km7 <- kmeans(area_scaled, centers = 7, nstart = 25)
+km8 <- kmeans(area_scaled, centers = 8, nstart = 25)
+km9 <- kmeans(area_scaled, centers = 9, nstart = 25)
+km10 <- kmeans(area_scaled, centers = 10, nstart = 25)
 
+var_exp <- data.frame(K = 1:10,
+                      bss_tss = c(km1$betweenss/km1$totss,
+                                  km2$betweenss/km2$totss,
+                                  km3$betweenss/km3$totss,
+                                  km4$betweenss/km4$totss,
+                                  km5$betweenss/km5$totss,
+                                  km6$betweenss/km6$totss,
+                                  km7$betweenss/km7$totss,
+                                  km8$betweenss/km8$totss,
+                                  km9$betweenss/km9$totss,
+                                  km10$betweenss/km10$totss))
 
+var_exp %>%
+  ggplot(aes(K, bss_tss)) +
+  geom_point() +
+  geom_line() +
+  ggtitle('Elbow Plot')
+  
+area_features$cluster <- factor(km4$cluster)
 
+df <- left_join(df, area_features[,c('area', 'cluster')], by = 'area')
+df$area_cluster <- as.factor(df$cluster)
 
+df$area = NULL
 
-
-
-
-
-
-
-
-
+attr(df, 'na.action') <- NULL
 
 
 
