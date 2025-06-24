@@ -1,4 +1,7 @@
 library(tidyverse)
+library(MASS)
+library(fitdistrplus)
+library(e1071)
 
 df_full <- dataset
 
@@ -163,9 +166,69 @@ df$zoning <- NULL
 df$subdivision <- NULL
 df$cluster <- NULL
 
+df2 <- df
+
 ################################################################################
 
 #DATA EXPLORATION
+
+#UNIVARIATE ANALYSIS
+
+#Target Distribution
+
+df %>%
+  ggplot(aes(sale_price)) +
+  geom_histogram(bins=100)
+
+#Check whether the target variable follows Gamma Distribution
+
+descdist(df$sale_price[df$sale_price > 0], boot = 1000)
+
+fit <- fitdist(df$sale_price, 'gamma')
+fit$estimate
+gofstat(fit)
+
+#Predictor variables analysis
+
+cat_vars <- names(df)[sapply(df, is.factor)]
+
+#Relevel categorical predictors
+
+for (i in cat_vars) {
+  tab <- as.data.frame(table(df[,i]))
+  max <- which.max(tab[,2])
+  level_name <- as.character(tab[max,1])
+  df[,i] <- relevel(df[,i], ref = level_name)
+}
+
+summary(df[,cat_vars])
+
+#Numeric Variables
+
+num_vars <- names(df)[sapply(df, is.numeric)]
+
+#Check skewness
+
+skewness_values <- sapply(df[,num_vars], skewness)
+
+skew_df <- data.frame(
+  Variable = names(skewness_values),
+  Skewness = skewness_values
+)
+
+write.csv(skew_df, 'Skewness_values.csv', row.names = TRUE)
+
+#BIVARIATE ANALYSIS
+
+#Numeric/Numeric
+
+
+
+
+
+
+
+
 
 
 
