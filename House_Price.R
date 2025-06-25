@@ -4,6 +4,7 @@ library(fitdistrplus)
 library(e1071)
 library(GGally)
 library(effects)
+library(caret)
 
 
 df_full <- dataset
@@ -58,7 +59,6 @@ df$sqft <- NULL
 df$sqft_1 <- NULL
 df$sqft_lot <- NULL
 df$sqft_fbsmt <- NULL
-
 
 #Remove N/As
 
@@ -238,6 +238,18 @@ df$log_Tot_val <- log1p(df$Tot_val)
 df$sqrt_Pro_Age <- sqrt(df$Pro_Age)
 df$log_lot_eff <- log1p(df$lot_eff)
 
+df$Tot_val <- NULL
+df$Pro_Age <- NULL
+df$lot_eff <- NULL
+
+df %>%
+  ggplot(aes(stories_capped, sale_price)) +
+  geom_point()
+
+#Remove zero values
+
+df <- df[df$log_Tot_val != 0,]
+
 #Numeric/Categorical
 
 df %>%
@@ -258,11 +270,24 @@ df %>%
 
 #Interactions
 
-df %>%
-  ggplot(aes(Tot_val, sale_price)) +
-  geom_point(alpha = 0.4) +
-  facet_wrap(~ view_lakewash)
+################################################################################
 
+#MODEL DEVELOPMENT
+
+set.seed(1234)
+
+partition <- createDataPartition(df$sale_price, p = 0.7, list = FALSE)
+
+df_train <- df[partition,]
+df_test <- df[-partition,]
+
+mean(df_train$sale_price)
+mean(df_test$sale_price)
+
+glm1 <- glm(sale_price ~ ., data = df_train, family = Gamma(link = 'log'))
+summary(glm1)
+
+#MODEL DIAGNOSTICS
 
 
 
