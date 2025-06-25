@@ -3,6 +3,8 @@ library(MASS)
 library(fitdistrplus)
 library(e1071)
 library(GGally)
+library(effects)
+
 
 df_full <- dataset
 
@@ -237,6 +239,29 @@ df$sqrt_Pro_Age <- sqrt(df$Pro_Age)
 df$log_lot_eff <- log1p(df$lot_eff)
 
 #Numeric/Categorical
+
+df %>%
+  ggplot(aes(stories_capped, sale_price)) + 
+  geom_boxplot(fill='lightblue')
+
+df %>%
+  ggplot(aes(Grade_group, sale_price)) +
+  geom_boxplot(fill='lightblue')
+
+df %>%
+  ggplot(aes(area_cluster, sale_price)) +
+  geom_boxplot(fill='lightblue')
+
+df %>%
+  ggplot(aes(wfnt, sale_price)) +
+  geom_boxplot(fill='lightblue')
+
+#Interactions
+
+df %>%
+  ggplot(aes(Tot_val, sale_price)) +
+  geom_point(alpha = 0.4) +
+  facet_wrap(~ view_lakewash)
 
 
 
