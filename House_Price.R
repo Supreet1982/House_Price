@@ -357,6 +357,18 @@ cbind(
   estimate_reduced = tidy(glm_reduced)$estimate
 )
 
+#Overdispersion check
+
+resid_dev <- deviance(glm1)
+df_resid <- df.residual(glm1)
+dispersion <- resid_dev / df_resid
+cat('Dispersion:',dispersion)
+
+resid_dev_red <- deviance(glm_reduced)
+df_resid_red <- df.residual(glm_reduced)
+dispersion_red <- resid_dev_red / df_resid_red
+cat('Dispersion:', dispersion_red)
+
 ################################################################################
 
 #XGBoost
