@@ -369,6 +369,8 @@ df_resid_red <- df.residual(glm_reduced)
 dispersion_red <- resid_dev_red / df_resid_red
 cat('Dispersion:', dispersion_red)
 
+#Dispersion = 0.2409229
+
 ################################################################################
 
 #XGBoost
