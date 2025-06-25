@@ -5,6 +5,8 @@ library(e1071)
 library(GGally)
 library(effects)
 library(caret)
+library(car)
+library(broom)
 
 
 df_full <- dataset
@@ -289,7 +291,71 @@ summary(glm1)
 
 #MODEL DIAGNOSTICS
 
+res_dev <- residuals(glm1, type = 'deviance')
+res_pearson <- residuals(glm1, type = 'pearson')
+fitted_vals <- fitted(glm1)
 
+plot(fitted_vals, res_dev, xlab = 'Fitted Value', ylab = 'Deviance Residual',
+     main = 'Fitted vs Deviance Residual')
+abline(h=0, col='red')
+
+qqnorm(res_dev)
+qqline(res_dev, col='red')
+
+cooksD <- cooks.distance(glm1)
+hat_values <- hatvalues(glm1)
+
+plot(cooksD, type = 'h', main = "Cook's Distance")
+abline(h = 4 / nrow(df_train), col='red', lty=2)
+
+plot(hat_values, main = 'Leverage (Hat values)')
+abline(h = 2 * mean(hat_values), col='red', lty = 2)
+
+influencePlot(glm1, id.method = 'identity')
+
+#Create a model without the influential point
+
+which(as.numeric(rownames(df_train)) == 165031)
+
+glm_reduced <- glm(sale_price ~ ., family = Gamma(link = 'log'),
+                   data = df_train[-114817,])
+summary(glm_reduced)
+
+cooksD_red <- cooks.distance(glm_reduced)
+hat_values_red <- hatvalues(glm_reduced)
+
+plot(cooksD_red, type = 'h', main = "Cook's Distance reduced GLM")
+abline(h = 4 / nrow(df_train), col='red', lty = 2)
+
+plot(hat_values_red, main = 'Leverage (Hat values) Reduced GLM')
+abline(h = 2 * mean(hat_values_red), col = 'red', lty = 2)
+
+influencePlot(glm_reduced, id.method='identity')
+
+res_dev_red <- residuals(glm_reduced, type = 'deviance')
+fitted_vals_red <- fitted(glm_reduced)
+
+plot(fitted_vals_red, res_dev_red, xlab = 'Fitted Value', 
+     ylab = 'Deviance Residual', main = 'Fitted vs Deviance Residual')
+abline(h=0, col='red')
+
+qqnorm(res_dev_red)
+qqline(res_dev_red, col='red')
+
+#Predictive Accuracy
+
+pred <- predict(glm1, newdata = df_test, type = 'response')
+pred_red <- predict(glm_reduced, newdata = df_test, type = 'response')
+actual <- df_test$sale_price
+
+RMSE(pred, actual)
+RMSE(pred_red, actual)
+
+cbind(
+  term = tidy(glm1)$term,
+  estimate_full = tidy(glm1)$estimate,
+  estimate_reduced = tidy(glm_reduced)$estimate
+)
 
 
 
