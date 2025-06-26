@@ -8,6 +8,9 @@ library(caret)
 library(car)
 library(broom)
 library(pdp)
+library(Metrics)
+library(dplyr)
+library(doParallel)
 
 
 df_full <- dataset
@@ -399,6 +402,76 @@ RMSE(final_pred, df_test$sale_price)
 
 partial(xgb_tuned, train = df_train, pred.var = 'log_Tot_val', plot = TRUE)
 partial(xgb_tuned, train = df_train, pred.var = 'sqrt_Pro_Age', plot = TRUE)
+partial(xgb_tuned, train = df_train, pred.var = 'bath', plot = TRUE)
+
+#Prediction Interval
+
+bootstrap_preds_with_actuals <- function(model_formula, data, newdata, B = 100,
+                                         tr_ctrl, tune_grid, seed = 123) {
+  set.seed(seed)
+  
+  #store actuals
+  actuals <- newdata$sale_price
+  newdata_noy <- newdata[, setdiff(names(newdata), 'sale_price')]
+  
+  n <- nrow(newdata_noy)
+  preds_mat <- matrix(NA, nrow = n, ncol = B)
+  
+  for (i in 1:B) {
+    sample_idx <- sample(1:nrow(data), replace = TRUE)
+    boot_data <- data[sample_idx, ]
+    
+    boot_model <- train(model_formula, data = boot_data, method = 'xgbTree',
+                        trControl = tr_ctrl, tuneGrid = tune_grid)
+    
+    preds_mat[, i] <- predict(boot_model, newdata_noy)
+  }
+  
+  #Compute point estimate and interval on log scale
+  point_est <- apply(preds_mat, 1, mean)
+  lower <- apply(preds_mat, 1, quantile, probs = 0.025)
+  upper <- apply(preds_mat, 1, quantile, probs = 0.975)
+  
+  pred_df <- data.frame(
+    Predicted = exp(point_est),
+    Lower_PI = exp(lower),
+    Upper_PI = exp(upper),
+    Actual = actuals
+  )
+  
+  #Coverage indicator
+  pred_df$Covered <- with(pred_df, Actual >= Lower_PI & Actual <= Upper_PI)
+  
+  #Summary metrics
+  rmse_val <- rmse(pred_df$Actual, pred_df$Predicted)
+  mae_val <- mae(pred_df$Actual, pred_df$Predicted)
+  coverage <- mean(pred_df$Covered)
+  
+  cat("RMSE:", round(rmse_val, 2), "\n")
+  cat("MAE:", round(mae_val, 2), "\n")
+  cat("Coverage Rate (95% PI):", round(coverage, 2), "%\n")
+  
+  return(pred_df)
+}
+
+n_cores <- parallel::detectCores() - 1
+cl <- makeCluster(n_cores)
+registerDoParallel(cl)
+
+results <- bootstrap_preds_with_actuals(
+  model_formula = log(sale_price) ~ ., data = df_train,
+  newdata = df_test, B = 100, tr_ctrl = xgb_ctrl, tune_grid = xgb_grid
+)
+
+
+
+
+
+
+
+
+
+
 
 
 
