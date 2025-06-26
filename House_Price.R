@@ -7,6 +7,7 @@ library(effects)
 library(caret)
 library(car)
 library(broom)
+library(pdp)
 
 
 df_full <- dataset
@@ -373,7 +374,31 @@ cat('Dispersion:', dispersion_red)
 
 ################################################################################
 
-#XGBoost
+#XGBoost model with Log of target variable, since the target variable is
+#right skewed
+
+xgb_ctrl <- trainControl(method = 'cv', number = 5)
+xgb_grid <- expand.grid(max_depth = 7, min_child_weight = 1, gamma = 0,
+                        nrounds = c(50,100,150,200,250,300),
+                        eta = c(0.001, 0.002, 0.01, 0.02, 0.1),
+                        colsample_bytree = 0.6, subsample = 0.6)
+
+set.seed(42)
+
+xgb_tuned <- train(log(sale_price) ~ ., data = df_train, method = 'xgbTree',
+                   trControl = xgb_ctrl, tuneGrid = xgb_grid)
+
+summary(xgb_tuned)
+
+ggplot(varImp(xgb_tuned), top = 5)
+
+log_pred <- predict(xgb_tuned, newdata = df_test)
+final_pred <- exp(log_pred)
+
+RMSE(final_pred, df_test$sale_price)
+
+partial(xgb_tuned, train = df_train, pred.var = 'log_Tot_val', plot = TRUE)
+partial(xgb_tuned, train = df_train, pred.var = 'sqrt_Pro_Age', plot = TRUE)
 
 
 
