@@ -406,8 +406,12 @@ partial(xgb_tuned, train = df_train, pred.var = 'bath', plot = TRUE)
 
 #Prediction Interval
 
+xgb_grid_fixed <- xgb_tuned$bestTune
+xgb_ctrl_boot <- trainControl(method = 'none')
+
 bootstrap_preds_with_actuals <- function(model_formula, data, newdata, B = 100,
-                                         tr_ctrl, tune_grid, seed = 123) {
+                                         tr_ctrl, tune_grid, seed = 123,
+                                         add_residual = TRUE) {
   set.seed(seed)
   
   #store actuals
@@ -424,7 +428,16 @@ bootstrap_preds_with_actuals <- function(model_formula, data, newdata, B = 100,
     boot_model <- train(model_formula, data = boot_data, method = 'xgbTree',
                         trControl = tr_ctrl, tuneGrid = tune_grid)
     
-    preds_mat[, i] <- predict(boot_model, newdata_noy)
+    preds <- predict(boot_model, newdata_noy) #log scale
+    
+    if (add_residual) {
+      train_preds <- predict(boot_model, newdata = boot_data)
+      train_resid <- log(boot_data$sale_price) - train_preds
+      resid_sd <- sd(train_resid)
+      preds <- preds + rnorm(length(preds), mean = 0, sd = resid_sd)
+    }
+    
+    preds_mat[, i] <- preds
   }
   
   #Compute point estimate and interval on log scale
@@ -454,16 +467,16 @@ bootstrap_preds_with_actuals <- function(model_formula, data, newdata, B = 100,
   return(pred_df)
 }
 
-n_cores <- parallel::detectCores() - 1
-cl <- makeCluster(n_cores)
-registerDoParallel(cl)
-
 results <- bootstrap_preds_with_actuals(
   model_formula = log(sale_price) ~ ., data = df_train,
-  newdata = df_test, B = 100, tr_ctrl = xgb_ctrl, tune_grid = xgb_grid
+  newdata = df_test, B = 100, tr_ctrl = xgb_ctrl_boot, tune_grid = xgb_grid_fixed
 )
 
+#RMSE: 270543.2 
+#MAE: 170961 
+#Coverage Rate (95% PI): 0.21 %
 
+results
 
 
 
