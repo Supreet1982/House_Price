@@ -478,8 +478,63 @@ results <- bootstrap_preds_with_actuals(
 
 results
 
+################################################################################
 
+library(xgboost)
+library(future.apply)
 
+df$log_sale_price <- log(df$sale_price)
+df_train <- df[partition,]
+df_test <- df[-partition,]
+
+mean(df_train$log_sale_price)
+mean(df_test$log_sale_price)
+
+target_var <- 'log_sale_price'
+
+train_y <- df_train[[target_var]]
+
+train_x <- df_train[, !(names(df_train) %in% c(target_var, 'sale_price')), 
+                        drop = FALSE]
+
+#Convert to numeric matrix
+
+train_x_mat <- model.matrix(~ . -1, data = train_x)
+
+#Dmatrix
+
+dtrain <- xgb.DMatrix(data = train_x_mat, label = train_y)
+
+#Test data
+
+test_x <- df_test[, names(train_x), drop = FALSE]
+test_x_mat <- model.matrix(~ . - 1, data = test_x)
+dtest <- xgb.DMatrix(data = test_x_mat)
+
+#Define eta grid
+
+eta_grid <- c(0.01, 0.05, 0.1, 0.2)
+
+#Run CV for each eta
+
+cv_results <- lapply(eta_grid, function(eta_val) {
+  cv <- xgb.cv(
+    data = dtrain,
+    objective = "reg:squarederror",
+    nrounds = 1000, #large upper limit
+    eta = eta_val,
+    max_depth = 6,
+    nfold = 6,
+    early_stopping_rounds = 20,
+    verbose = 0
+  )
+  
+  list(
+    eta = eta_val,
+    best_nrounds = cv$best_iteration,
+    best_rmse = min(cv$evaluation_log$test_rmse_mean)
+  )
+})
 
 
 
