@@ -11,6 +11,8 @@ library(pdp)
 library(Metrics)
 library(dplyr)
 library(doParallel)
+library(xgboost)
+library(future.apply)
 
 
 df_full <- dataset
@@ -480,8 +482,7 @@ results
 
 ################################################################################
 
-library(xgboost)
-library(future.apply)
+#XGBOOST
 
 df$log_sale_price <- log(df$sale_price)
 df_train <- df[partition,]
@@ -535,6 +536,36 @@ cv_results <- lapply(eta_grid, function(eta_val) {
     best_rmse = min(cv$evaluation_log$test_rmse_mean)
   )
 })
+
+#see results
+
+cv_table <- do.call(rbind, cv_results)
+print(cv_table)
+
+# Pick the best
+
+best_idx <- which.min(sapply(cv_results, function(x) x$best_rmse))
+best_eta <- cv_results[[best_idx]]$eta
+best_nrounds <- cv_results[[best_idx]]$best_nrounds
+
+print(best_eta)
+print(best_nrounds)
+
+# Final model
+
+final_model <- xgboost(
+  data = dtrain,
+  objective = 'reg:squarederror',
+  nrounds = best_nrounds,
+  eta = best_eta,
+  max_depth = 6,
+  nthread = parallel::detectCores(),
+  verbose = 1
+)
+
+
+
+
 
 
 
