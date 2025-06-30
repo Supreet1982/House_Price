@@ -798,7 +798,7 @@ test_df$log_Tot_val[test_df$log_Tot_val == 0] <- mean_log_tot_val_t
 
 test_df_final <- test_df
 
-
+write.csv(test_df, 'test_df.csv')
 
 
 
