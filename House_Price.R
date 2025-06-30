@@ -13,6 +13,7 @@ library(dplyr)
 library(doParallel)
 library(xgboost)
 library(future.apply)
+library(Matrix)
 
 
 df_full <- dataset
@@ -553,15 +554,262 @@ print(best_nrounds)
 
 # Final model
 
+train_x_sparse <- Matrix(train_x_mat, sparse = TRUE)
+test_x_sparse <- Matrix(test_x_mat, sparse = TRUE)
+
+dim(train_x_sparse)
+dim(train_x_mat)
+dim(test_x_mat)
+dim(test_x_sparse)
+
+dtrain_2 <- xgb.DMatrix(data = train_x_sparse, label = train_y)
+dtest_2 <- xgb.DMatrix(data = test_x_sparse)
+
 final_model <- xgboost(
-  data = dtrain,
+  data = dtrain_2,
   objective = 'reg:squarederror',
   nrounds = best_nrounds,
   eta = best_eta,
   max_depth = 6,
-  nthread = parallel::detectCores(),
-  verbose = 1
+  nthread = 2,
+  verbose = 1,
+  tree_method = 'hist'
 )
+
+#Predict on Train and test data
+
+mean_preds_log <- predict(final_model, dtrain_2)
+mean_preds_log_test <- predict(final_model, dtest_2)
+
+#Back transform
+
+mean_preds <- exp(mean_preds_log)
+mean_preds_test <- exp(mean_preds_log_test)
+
+rmse(df_test$sale_price, mean_preds_test)
+
+rmse(mean_preds, exp(train_y))
+
+#Prediction Interval
+
+#Parallel plan
+
+future::plan(multisession)
+
+n_boot <- 100    #Adjust for your resources
+
+boot_pred <- future_sapply(1:n_boot, function(i) {
+  idx <- sample(1:nrow(train_x), replace = TRUE)
+  
+  dtrain_boot <- xgb.DMatrix(data = train_x_mat[idx,], label = train_y[idx])
+  
+  dtest_local <- xgb.DMatrix(data = test_x_mat)
+  
+  model_boot <- xgboost(
+    data = dtrain_boot,
+    objective = 'reg:squarederror',
+    nrounds = best_nrounds,
+    eta = best_eta,
+    max_depth = 6,
+    nthread = 1,
+    verbose = 0
+  )
+  
+  predict(model_boot, dtest_local)
+},
+future.seed = TRUE  
+)
+
+#Compute log scale intervals
+
+lower_log <- apply(boot_pred, 1, quantile, probs = 0.025)
+upper_log <- apply(boot_pred, 1, quantile, probs = 0.975)
+
+#Back_transform
+
+lower <- exp(lower_log)
+upper <- exp(upper_log)
+
+#Combine
+
+results <- data.frame(
+  mean_preds = mean_preds_test,
+  lower = lower,
+  upper = upper
+)
+
+head(results)
+
+write.csv(df, 'df.csv')
+
+################################################################################
+
+#Test data modifications
+
+test_set <- test
+
+test_df <- test_set
+
+test_df <- test_df[, -c(1,3,4,5,6,7,8,13,17,23,24,30,46)]
+test_df$bath <- test_df$bath_full + (0.75*test_df$bath_3qtr) + 
+  (0.5*test_df$bath_half)
+
+test_df <- test_df[,-c(16,17,18)]
+
+test_df$Tot_val <- test_df$land_val + test_df$imp_val
+test_df <- test_df[, -c(6,7)]
+
+test_df$Sale_year <- format(as.Date(test_df$sale_date), '%Y')
+test_df$sale_date <- NULL
+test_df$Sale_year <- as.numeric(test_df$Sale_year)
+
+test_df$Pro_Age <- test_df$Sale_year - test_df$year_built
+test_df$Sale_year <- NULL
+test_df$year_built <- NULL
+
+test_df$Pro_Age[test_df$Pro_Age < 0] <- 0
+
+test_df$bmt_ratio <- test_df$sqft_fbsmt / test_df$sqft
+
+mean_sqft_lot_t <- mean(test_df$sqft_lot[test_df$sqft_lot != 0])
+test_df$sqft_lot[test_df$sqft_lot == 0] <- mean_sqft_lot_t
+
+test_df$lot_eff <- test_df$sqft / test_df$sqft_lot
+
+test_df$sqft <- NULL
+test_df$sqft_1 <- NULL
+test_df$sqft_lot <- NULL
+test_df$sqft_fbsmt <- NULL
+
+#Remove N/As
+
+test_df <- na.omit(test_df)
+
+test_df$has_garage <- as.integer(test_df$gara_sqft > 0)
+test_df$log_garage <- log1p(test_df$gara_sqft)
+test_df$has_garage <- as.factor(test_df$has_garage)
+
+test_df$gara_sqft <- NULL
+
+#Stories
+
+test_df$stories_capped <- pmin(test_df$stories, 3)
+test_df$stories_capped <- as.factor(test_df$stories_capped)
+levels(df$stories_capped)[levels(test_df$stories_capped) == '3'] <- '3+'
+test_df$stories <- NULL
+
+test_df$noise_traffic <- factor(test_df$noise_traffic)
+test_df$greenbelt <- factor(test_df$greenbelt)
+test_df$golf <- factor(test_df$golf)
+test_df$wfnt <- as.factor(test_df$wfnt)
+
+cols_to_factors_t <- grep('^view_', names(test_df), value = TRUE)
+
+df[cols_to_factors_t] <- lapply(df[cols_to_factors_t], factor)
+
+test_df$Grade_group <- cut(test_df$grade, breaks = c(0,5,7,10,13),
+                      labels = c('low', 'Average', 'Above Average', 'Luxury'),
+                      right = TRUE)
+test_df$grade <- NULL
+
+#Beds
+
+test_df$beds_grouped <- ifelse(test_df$beds >= 6, '6+', as.character(test_df$beds))
+test_df$beds_grouped <- as.factor(test_df$beds_grouped)
+
+test_df$beds <- NULL
+
+#Area (Use k-means)
+
+area_features_t <- test_df %>%
+  group_by(area) %>%
+  summarize(
+    bath_mean = mean(bath),
+    age_mean = mean(Pro_Age),
+    bmt_mean = mean(bmt_ratio),
+    lot_eff_mean = mean(lot_eff),
+    garage_mean = mean(log_garage),
+    has_garage_pct = mean(as.numeric(as.character(has_garage))),
+    traffic_mean = mean(as.numeric(as.character(noise_traffic))),
+    greenbelt_pct = mean(as.numeric(as.character(greenbelt))),
+    stories_mode = as.numeric(names(which.max(table(stories_capped))))
+  )
+
+area_scaled_t <- scale(area_features_t[,-1])
+
+set.seed(1)
+
+km1_t <- kmeans(area_scaled_t, centers = 1, nstart = 25)
+km2_t <- kmeans(area_scaled_t, centers = 2, nstart = 25)
+km3_t <- kmeans(area_scaled_t, centers = 3, nstart = 25)
+km4_t <- kmeans(area_scaled_t, centers = 4, nstart = 25)
+km5_t <- kmeans(area_scaled_t, centers = 5, nstart = 25)
+km6_t <- kmeans(area_scaled_t, centers = 6, nstart = 25)
+km7_t <- kmeans(area_scaled_t, centers = 7, nstart = 25)
+km8_t <- kmeans(area_scaled_t, centers = 8, nstart = 25)
+km9_t <- kmeans(area_scaled_t, centers = 9, nstart = 25)
+km10_t <- kmeans(area_scaled_t, centers = 10, nstart = 25)
+
+var_exp_t <- data.frame(K = 1:10,
+                      bss_tss = c(km1_t$betweenss/km1$totss,
+                                  km2_t$betweenss/km2$totss,
+                                  km3_t$betweenss/km3$totss,
+                                  km4_t$betweenss/km4$totss,
+                                  km5_t$betweenss/km5$totss,
+                                  km6_t$betweenss/km6$totss,
+                                  km7_t$betweenss/km7$totss,
+                                  km8_t$betweenss/km8$totss,
+                                  km9_t$betweenss/km9$totss,
+                                  km10_t$betweenss/km10$totss))
+
+var_exp_t %>%
+  ggplot(aes(K, bss_tss)) +
+  geom_point() +
+  geom_line() +
+  ggtitle('Elbow Plot')
+
+area_features_t$cluster <- factor(km3_t$cluster)
+
+test_df <- left_join(test_df, area_features[,c('area', 'cluster')], by = 'area')
+test_df$area_cluster <- as.factor(test_df$cluster)
+
+test_df$area = NULL
+
+attr(test_df, 'na.action') <- NULL
+
+test_df$city <- NULL
+test_df$zoning <- NULL
+test_df$subdivision <- NULL
+test_df$cluster <- NULL
+
+test_df_final <- test_df
+
+test_df$log_Tot_val <- log1p(test_df$Tot_val)
+test_df$sqrt_Pro_Age <- sqrt(test_df$Pro_Age)
+test_df$log_lot_eff <- log1p(test_df$lot_eff)
+
+test_df$Tot_val <- NULL
+test_df$Pro_Age <- NULL
+test_df$lot_eff <- NULL
+
+
+mean_log_tot_val_t <- mean(test_df$log_Tot_val[test_df$log_Tot_val != 0])
+test_df$log_Tot_val[test_df$log_Tot_val == 0] <- mean_log_tot_val_t
+
+test_df_final <- test_df
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
