@@ -800,24 +800,55 @@ test_df_final <- test_df
 
 write.csv(test_df, 'test_df.csv')
 
+################################################################################
 
+glm_new <- glm(sale_price ~ log_Tot_val + sqrt_Pro_Age + bath + Grade_group +
+                 log_lot_eff, data = df, family = Gamma(link = 'log'))
 
+mu_hat <- predict(glm_new, newdata = test_df, type = 'response')
+phi_hat <- summary(glm_new)$dispersion
 
+shape_hat <- 1 / phi_hat
+scale_hat <- mu_hat * phi_hat
 
+lower_pi <- qgamma(0.025, shape = shape_hat, scale = scale_hat)
+upper_pi <- qgamma(0.975, shape = shape_hat, scale = scale_hat)
 
+pi_data <- data.frame(
+  id = test$id,
+  pi_lower = lower_pi,
+  pi_upper = upper_pi
+)
 
+str(pi_data)
 
+write.csv(pi_data, 'submission_3.csv')
 
+################################################################################
 
+glm_new_2 <- glm(sale_price ~ log_Tot_val + sqrt_Pro_Age, 
+                 data = df, family = Gamma(link = 'log'))
 
+mu_hat_2 <- predict(glm_new_2, newdata = test_df, type = 'response')
+phi_hat_2 <- summary(glm_new_2)$dispersion
 
+shape_hat_2 <- 1 / phi_hat_2
+scale_hat_2 <- mu_hat_2 * phi_hat_2
 
+lower_pi_2 <- qgamma(0.025, shape = shape_hat_2, scale = scale_hat_2)
+upper_pi_2 <- qgamma(0.975, shape = shape_hat_2, scale = scale_hat_2)
 
+pi_data_2 <- data.frame(
+  id = test$id,
+  pi_lower = lower_pi_2,
+  pi_upper = upper_pi_2
+)
 
+str(pi_data)
 
+write.csv(pi_data_2, 'submission_4.csv')
 
-
-
+################################################################################
 
 
 
