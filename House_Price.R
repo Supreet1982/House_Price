@@ -695,7 +695,7 @@ test_df$gara_sqft <- NULL
 
 test_df$stories_capped <- pmin(test_df$stories, 3)
 test_df$stories_capped <- as.factor(test_df$stories_capped)
-levels(df$stories_capped)[levels(test_df$stories_capped) == '3'] <- '3+'
+levels(test_df$stories_capped)[levels(test_df$stories_capped) == '3'] <- '3+'
 test_df$stories <- NULL
 
 test_df$noise_traffic <- factor(test_df$noise_traffic)
@@ -826,8 +826,12 @@ write.csv(pi_data, 'submission_3.csv')
 
 ################################################################################
 
-glm_new_2 <- glm(sale_price ~ log_Tot_val + sqrt_Pro_Age, 
-                 data = df, family = Gamma(link = 'log'))
+df_glm <- df
+df_glm$log_sale_price <- NULL
+
+test_df[cols_to_factors] <- lapply(test_df[cols_to_factors], factor)
+
+glm_new_2 <- glm(sale_price ~ ., data = df_glm, family = Gamma(link = 'log'))
 
 mu_hat_2 <- predict(glm_new_2, newdata = test_df, type = 'response')
 phi_hat_2 <- summary(glm_new_2)$dispersion
@@ -844,9 +848,7 @@ pi_data_2 <- data.frame(
   pi_upper = upper_pi_2
 )
 
-str(pi_data)
-
-write.csv(pi_data_2, 'submission_4.csv')
+write.csv(pi_data_2, 'submission_5.csv')
 
 ################################################################################
 
